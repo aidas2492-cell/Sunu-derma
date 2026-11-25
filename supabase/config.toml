@@ -1,0 +1,7 @@
+project_id = "unnpyuxjrcybwclwymcv"
+
+[functions.analyze-skin]
+verify_jwt = false
+
+[functions.derma-chat]
+verify_jwt = false
