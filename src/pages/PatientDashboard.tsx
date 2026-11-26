@@ -18,6 +18,30 @@ import { useNavigate } from "react-router-dom";
 type Tab = "home" | "ai-analysis" | "ai-chat" | "consultation" | "shop" | "profile" | "history" | "notifications" | "subscription";
 
 // ======================= WEATHER WIDGET =======================
+// Les photos de peau sont dans un bucket privé : on génère des URL signées (1 h)
+// à partir du chemin enregistré. Les anciennes lignes contiennent une URL publique
+// complète, dont on extrait le chemin.
+const SKIN_BUCKET = "skin-analyses";
+function skinPhotoPath(stored: string | null | undefined): string | null {
+  if (!stored || stored.startsWith("data:")) return null;
+  const marker = `/${SKIN_BUCKET}/`;
+  const idx = stored.indexOf(marker);
+  if (idx >= 0) return decodeURIComponent(stored.slice(idx + marker.length).split("?")[0]);
+  return stored.startsWith("http") ? null : stored;
+}
+
+async function withSignedSkinPhotos<T extends { image_url?: string | null }>(rows: T[]): Promise<T[]> {
+  const paths = rows.map(r => skinPhotoPath(r.image_url)).filter((p): p is string => !!p);
+  if (paths.length === 0) return rows;
+  const { data, error } = await supabase.storage.from(SKIN_BUCKET).createSignedUrls(paths, 3600);
+  if (error || !data) return rows.map(r => (skinPhotoPath(r.image_url) ? { ...r, image_url: null } : r));
+  const byPath = new Map(data.map(d => [d.path, d.signedUrl]));
+  return rows.map(r => {
+    const path = skinPhotoPath(r.image_url);
+    return path ? { ...r, image_url: byPath.get(path) ?? null } : r;
+  });
+}
+
 function WeatherWidget() {
   const [uv, setUv] = useState(7);
   const [temp, setTemp] = useState(32);
@@ -153,8 +177,8 @@ function AIAnalysisPage({ onBack, userId }: { onBack: () => void; userId: string
     const path = `${userId}/${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from("skin-analyses").upload(path, file, { upsert: false });
     if (error) { console.error("Upload error:", error); return null; }
-    const { data: { publicUrl } } = supabase.storage.from("skin-analyses").getPublicUrl(path);
-    return publicUrl;
+    // Le bucket est privé : on enregistre le chemin, l'affichage passe par une URL signée.
+    return path;
   };
 
   const analyze = async () => {
@@ -409,12 +433,17 @@ function AIChatPage({ onBack }: { onBack: () => void }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ""}`,
         },
         body: JSON.stringify({ messages: allMessages }),
       });
 
-      if (!resp.ok || !resp.body) throw new Error("Stream failed");
+      if (!resp.ok || !resp.body) {
+        // Affiche le message du serveur (limite atteinte, connexion requise...) s'il y en a un.
+        const serverError = await resp.json().then((b) => b?.error).catch(() => null);
+        throw new Error(serverError || "Stream failed");
+      }
 
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
@@ -455,7 +484,8 @@ function AIChatPage({ onBack }: { onBack: () => void }) {
       }
     } catch (e) {
       console.error(e);
-      setMessages(prev => [...prev, { role: "assistant", content: "Désolé, une erreur est survenue. Réessayez." }]);
+      const msg = e instanceof Error && e.message !== "Stream failed" ? e.message : "Désolé, une erreur est survenue. Réessayez.";
+      setMessages(prev => [...prev, { role: "assistant", content: msg }]);
     } finally {
       setLoading(false);
     }
@@ -970,7 +1000,8 @@ function ShopPage({ onBack, userId }: { onBack: () => void; userId: string }) {
     try {
       await supabase.from("orders").insert({
         user_id: userId,
-        product_ids: cart.map(c => c.product.id),
+        // Un identifiant par unité : le total est recalculé côté serveur à partir des prix en base.
+        product_ids: cart.flatMap(c => Array(c.qty).fill(c.product.id)),
         total,
         payment_method: method,
         status: "pending",
@@ -1647,34 +1678,24 @@ function SubscriptionPage({ onBack, profile, userId, onProfileUpdate }: { onBack
     setProcessing(true);
 
     try {
-      // Simulate payment processing (in production, integrate real Wave/OM API)
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Le paiement n'est pas encore automatique : on enregistre une demande,
+      // l'activation Premium se fait après vérification du paiement par l'équipe.
+      const { error } = await supabase.from("premium_requests").insert({
+        user_id: userId,
+        plan: selectedPlan,
+        amount: selectedPlan === "gold" ? 9000 : 5500, // recalculé côté serveur
+        payment_method: paymentMethod,
+        phone,
+      });
+      if (error) throw error;
 
-      // Update profile to premium
       const { data } = await supabase
         .from("profiles")
-        .update({ is_premium: true, phone })
+        .update({ phone })
         .eq("user_id", userId)
         .select()
         .single();
-
       if (data) onProfileUpdate(data);
-
-      // Create order record
-      await supabase.from("orders").insert({
-        user_id: userId,
-        total: selectedPlan === "gold" ? 9000 : 5500,
-        status: "completed",
-        payment_method: paymentMethod,
-      });
-
-      // Create welcome notification
-      await supabase.from("notifications").insert({
-        user_id: userId,
-        title: "🎉 Bienvenue Premium !",
-        message: `Votre abonnement ${selectedPlan === "gold" ? "Gold Premium" : "Simple"} est activé. Profitez de tous vos avantages !`,
-        type: "subscription",
-      });
 
       setSuccess(true);
     } catch (err) {
@@ -1696,10 +1717,10 @@ function SubscriptionPage({ onBack, profile, userId, onProfileUpdate }: { onBack
             <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
               <Check className="h-10 w-10 text-primary" />
             </div>
-            <h3 className="text-2xl font-display font-bold">Paiement réussi ! 🎉</h3>
+            <h3 className="text-2xl font-display font-bold">Demande envoyée</h3>
             <p className="text-muted-foreground">
-              Votre abonnement {selectedPlan === "gold" ? "Gold Premium" : "Simple"} est maintenant actif.
-              Vous recevrez vos rappels skincare sur le <strong>{phone}</strong>.
+              Votre demande d'abonnement {selectedPlan === "gold" ? "Gold Premium" : "Simple"} est enregistrée.
+              Il sera activé dès que nous aurons vérifié votre paiement envoyé depuis le <strong>{phone}</strong>.
             </p>
             <Button onClick={onBack} className="bg-gradient-gold text-accent-foreground font-semibold shadow-gold">
               Retour à l'accueil
@@ -1881,7 +1902,7 @@ export default function PatientDashboard() {
   useEffect(() => {
     if (!user) return;
     supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle().then(({ data }) => setProfile(data));
-    supabase.from("skin_analyses").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20).then(({ data }) => setAnalyses(data || []));
+    supabase.from("skin_analyses").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20).then(async ({ data }) => setAnalyses(await withSignedSkinPhotos(data || [])));
     supabase.from("prescriptions").select("*").eq("patient_id", user.id).order("created_at", { ascending: false }).limit(5).then(({ data }) => setPrescriptions(data || []));
     supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("is_read", false).then(({ count }) => setUnreadNotifs(count || 0));
   }, [user]);
