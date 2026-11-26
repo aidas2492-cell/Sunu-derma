@@ -1,3 +1,4 @@
+import { usePageMeta } from "@/lib/seo";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
@@ -10,6 +11,7 @@ import { Stethoscope, User, ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export default function Auth() {
+  usePageMeta("Connexion et inscription", "Créez votre compte Sunu Derma gratuitement : analyse de peau IA, conseils skincare et rendez-vous avec un dermatologue.", "/auth");
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

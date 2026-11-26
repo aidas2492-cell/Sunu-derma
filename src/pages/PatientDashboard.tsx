@@ -1,3 +1,4 @@
+import { usePageMeta } from "@/lib/seo";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -249,7 +250,7 @@ function AIAnalysisPage({ onBack, userId }: { onBack: () => void; userId: string
                   <div>
                     <h3 className="font-display font-semibold text-lg">Prenez une photo</h3>
                     <p className="text-muted-foreground text-sm mt-1">
-                      Uploadez une photo claire de la zone à analyser pour obtenir un diagnostic IA détaillé.
+                      Envoyez une photo claire de la zone à analyser. L'IA donne une estimation, pas un diagnostic médical : en cas de doute, consultez un dermatologue.
                     </p>
                   </div>
                   <input type="file" accept="image/*" capture="environment" ref={fileRef} onChange={handleFileChange} className="hidden" />
@@ -1892,6 +1893,7 @@ function SubscriptionPage({ onBack, profile, userId, onProfileUpdate }: { onBack
 
 // ======================= MAIN DASHBOARD =======================
 export default function PatientDashboard() {
+  usePageMeta("Mon espace patient");
   const { user, signOut } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const [analyses, setAnalyses] = useState<any[]>([]);

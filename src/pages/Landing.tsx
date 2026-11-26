@@ -1,3 +1,4 @@
+import { usePageMeta } from "@/lib/seo";
 import { Link } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
@@ -59,17 +60,17 @@ const heroSlides = [
   },
 ];
 
-const testimonials = [
-  { name: "Aminata D.", role: "Patiente", text: "Grâce à Sunu Derma, j'ai enfin trouvé la routine idéale pour ma peau. L'analyse IA est bluffante !", avatar: "A" },
-  { name: "Dr. Moussa N.", role: "Dermatologue", text: "L'outil parfait pour suivre mes patients à distance. La messagerie live est un game-changer.", avatar: "M" },
-  { name: "Fatou S.", role: "Patiente", text: "Les produits recommandés sont de qualité et les prix sont très abordables. Je recommande !", avatar: "F" },
-];
+// Avis réels uniquement, avec l'accord écrit de la personne (nom, texte, photo).
+// La section ne s'affiche pas tant que la liste est vide.
+const testimonials: { name: string; role: string; text: string; avatar: string }[] = [];
 
+// Pas de chiffres inventés : on met en avant ce qui est vrai aujourd'hui.
+// Remplacer par de vrais chiffres (patients, médecins) quand ils existeront.
 const stats = [
-  { value: "5 000+", label: "Patients actifs", icon: Users },
-  { value: "50+", label: "Dermatologues", icon: Stethoscope },
-  { value: "25+", label: "Produits premium", icon: ShoppingBag },
-  { value: "98%", label: "Satisfaction", icon: Heart },
+  { value: "Gratuit", label: "Analyse de peau IA", icon: Users },
+  { value: "Wave · OM", label: "Paiement mobile", icon: Heart },
+  { value: "FCFA", label: "Prix locaux", icon: ShoppingBag },
+  { value: "Dakar", label: "Conçu au Sénégal", icon: Stethoscope },
 ];
 
 function HeroCarousel() {
@@ -208,6 +209,7 @@ function ProductShowcase() {
 }
 
 export default function Landing() {
+  usePageMeta("Sunu Derma — Dermatologie IA & Télémédecine au Sénégal", undefined, "/");
   return (
     <div className="min-h-screen bg-background">
       {/* Navbar */}
@@ -355,7 +357,7 @@ export default function Landing() {
           <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
             {[
               { step: "1", title: "Créez votre compte", desc: "Inscrivez-vous gratuitement et renseignez votre type de peau.", icon: Zap },
-              { step: "2", title: "Analysez votre peau", desc: "Uploadez une photo et notre IA vous donne un diagnostic détaillé.", icon: Camera },
+              { step: "2", title: "Analysez votre peau", desc: "Envoyez une photo : notre IA estime l'état de votre peau. Ce n'est pas un diagnostic médical.", icon: Camera },
               { step: "3", title: "Consultez un dermatologue", desc: "Prenez rendez-vous et échangez en direct avec un spécialiste.", icon: Stethoscope },
             ].map((s, i) => (
               <div key={s.step} className="text-center animate-fade-up" style={{ animationDelay: `${i * 0.15}s` }}>
@@ -374,6 +376,7 @@ export default function Landing() {
       </section>
 
       {/* Testimonials */}
+      {testimonials.length > 0 && (
       <section className="py-20">
         <div className="container">
           <h2 className="text-3xl md:text-4xl font-display font-bold text-center mb-4">
@@ -409,6 +412,7 @@ export default function Landing() {
           </div>
         </div>
       </section>
+      )}
 
       {/* CTA */}
       <section className="py-20">
