@@ -3,5 +3,6 @@ Allow: /
 Disallow: /patient
 Disallow: /doctor
 Disallow: /redirect
+Disallow: /reset-password
 
 Sitemap: https://aichatousysunu-derma.lovable.app/sitemap.xml
