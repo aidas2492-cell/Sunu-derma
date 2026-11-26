@@ -1,3 +1,4 @@
+import { usePageMeta } from "@/lib/seo";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -777,6 +778,7 @@ function DoctorProfileTab() {
 }
 
 export default function DoctorDashboard() {
+  usePageMeta("Espace médecin");
   const { signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
 
