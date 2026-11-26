@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_usage: {
+        Row: {
+          count: number
+          day: string
+          kind: string
+          user_id: string
+        }
+        Insert: {
+          count?: number
+          day: string
+          kind: string
+          user_id: string
+        }
+        Update: {
+          count?: number
+          day?: string
+          kind?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       appointments: {
         Row: {
           appointment_date: string
@@ -132,6 +153,42 @@ export type Database = {
           message?: string
           title?: string
           type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      premium_requests: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          payment_method: string
+          phone: string
+          plan: string
+          reviewed_at: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          payment_method: string
+          phone: string
+          plan: string
+          reviewed_at?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          payment_method?: string
+          phone?: string
+          plan?: string
+          reviewed_at?: string | null
+          status?: string
           user_id?: string
         }
         Relationships: []
@@ -344,6 +401,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      consume_ai_quota: {
+        Args: {
+          _kind: string
+          _limit: number
+        }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

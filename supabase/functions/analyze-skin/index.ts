@@ -1,22 +1,53 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Limite anti-abus par utilisateur et par jour (à ajuster selon l'offre Gratuit/Premium).
+const DAILY_ANALYSIS_LIMIT = 5;
+
+
+// Vérifie l'utilisateur connecté et consomme une unité de quota côté serveur.
+// Renvoie une Response d'erreur si l'appel doit être refusé, sinon null.
+async function checkAuthAndQuota(req: Request, kind: "analysis" | "chat", limit: number): Promise<Response | null> {
+  const json = (body: unknown, status: number) =>
+    new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+  const authHeader = req.headers.get("Authorization") ?? "";
+  if (!authHeader.startsWith("Bearer ")) return json({ error: "Connexion requise." }, 401);
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } },
+  );
+
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return json({ error: "Connexion requise." }, 401);
+
+  const { data: allowed, error: quotaError } = await supabase.rpc("consume_ai_quota", { _kind: kind, _limit: limit });
+  if (quotaError) {
+    console.error("quota error:", quotaError);
+    return json({ error: "Service momentanément indisponible." }, 500);
+  }
+  if (!allowed) return json({ error: "Limite quotidienne atteinte. Réessayez demain." }, 429);
+
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { imageBase64, type } = await req.json();
+    const denied = await checkAuthAndQuota(req, "analysis", DAILY_ANALYSIS_LIMIT);
+    if (denied) return denied;
+
+    const { imageBase64 } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
-
-    if (type === "chat") {
-      const { messages } = await req.json().catch(() => ({ messages: [] }));
-      // For chat mode, handled below
-    }
 
     const systemPrompt = `Tu es un dermatologue IA expert de Sunu Derma, spécialisé dans les peaux africaines et métissées.
 Analyse l'image de peau fournie et retourne un JSON structuré avec:
