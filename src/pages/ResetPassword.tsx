@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import PasswordInput from "@/components/PasswordInput";
 import { authErrorMessage } from "@/lib/authErrors";
+import { usePageMeta } from "@/lib/seo";
 
 type Status = "checking" | "ready" | "invalid";
 
@@ -18,10 +19,9 @@ export default function ResetPassword() {
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  usePageMeta("Nouveau mot de passe");
 
   useEffect(() => {
-    document.title = "Nouveau mot de passe | Sunu Derma";
-
     // Lien expiré ou déjà utilisé : Supabase l'indique dans l'URL.
     const params = new URLSearchParams(window.location.hash.slice(1) || window.location.search);
     if (params.get("error") || params.get("error_code")) {
